@@ -1,0 +1,86 @@
+                              // quick idea.
+// duplicate existing monsters  with a random offset.
+// basicly use existing location of monsters , and spawn duplicate near them
+// A very simple spawner..
+
+// loosly based on wat i saw on skws server(completly from scratch)
+// Wont copy bots like skws does
+// Wont copy bosses like skws dosnt
+
+
+
+class tent expands Mutator
+config(monstercopier);
+
+var (any)config bool balanceload;                             // try to balace load of monsters
+//------------------------------------------------------------//
+var() int cycles;                                             // How many timer cycles
+var int countspawns,countfails,origcnt;                       // Successful Spawns  / Failed spawns / Original monstercount
+var string spinclass;                                         // Reused for dls
+var int tempseed,tempmax;                                     // Map bases  limits
+var string tempexclusions;                                    // Exclusion list  on a per-map basis
+var int curplay,lastplay;                                     // Playercounts
+var class<actor> bbstart;                                     // Dont recall
+var scriptedpawn otherx;                                      // Scripted pwned
+var vector templocation;                                      // Vector //
+//------------------------------------------------------------//
+event BeginPlay()
+{
+      Super.BeginPlay();
+      SetTimer(10.0, true); // time deley to avoid the lockup.
+
+       //pre-seed. // dont pre-seed in jcoopz.
+       //dothings ();
+       log ("-------------------------------------------------------------------------------------------");
+       log ("-------------------------------------------------------------------------------------------");
+
+
+}
+
+
+
+
+
+
+
+
+
+
+  function Timer()
+   {
+
+     dothings();
+   }
+
+
+
+
+
+
+function dothings ()
+{   // Most of the work is here.,  Could be better typed-casted tho
+   local class<ScriptedPawn> spinnerNewClass;
+   local ScriptedPawn spinneraPawn;
+   local light other;
+
+   foreach AllActors(class'light', other)
+   { // Keep it simple stupid!  no more bullshit isa statments
+
+
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("unreali.tentacle", class'Class' ) );
+              spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+              spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+              spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+              spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+
+
+
+
+   }
+
+}
+
+
+
+
+

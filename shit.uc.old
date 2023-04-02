@@ -1,0 +1,46 @@
+// quick idea.
+// duplicate existing monsters  with a random offset.
+// basicly use existing location of monsters , and spawn duplicate near them
+// A very simple spawner..
+
+// loosly based on wat i saw on skws server(completly from scratch)
+// Wont copy bots like skws does
+// Wont copy bosses like skws dosnt
+
+
+
+class shit expands Mutator;
+
+
+struct exceptlist {
+     var() config string         classnamw;
+     var() config vector         pos;
+                   };
+
+var (any)      exceptlist exceptionrules[200];           // Map : limit exception to the defualt
+
+
+event BeginPlay()
+{
+      Super.BeginPlay();
+      SetTimer(10.0, true); // time deley to avoid the lockup.
+
+
+}
+
+   function Timer()
+   {
+
+   }
+
+
+
+
+
+
+
+
+
+
+
+

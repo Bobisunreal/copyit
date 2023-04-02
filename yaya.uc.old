@@ -1,0 +1,1118 @@
+            // quick idea.
+// duplicate existing monsters  with a random offset.
+// basicly use existing location of monsters , and spawn duplicate near them
+// A very simple spawner..
+
+
+// done - need to add ability to ingnore bosses.
+// want to add ability to subsitute spawns.
+// add ability to account for playerload
+// done! - spinnersupport.
+// subclass suport.
+// dont copy if b statis.  like decoration in illheaven
+// optional copybal health threshold
+// add ability to specify map limits in  mapname:count format.
+// fix  nomonster and limit etc
+// let  mutaiotr link with copies of itself and for a organized mutppier
+
+
+class monstercopier expands Mutator
+config(monstercopier);
+
+struct addonlist {
+     var() config string         pawnname;
+     var() config string         newclass;
+                   };
+
+
+struct exceptlist {
+     var() config string         map;
+     var() config int            max;
+     var() config int            seed;
+     var() config string         exclusions;
+                   };
+
+ var() int cycles;
+ var() travel int traveled;
+var (any)config int  seedlimit,multispawn,randpsace;        // Max total added monsters.
+var (any)config int  seedsaturation;                        // Wait if it is less then this high
+var (any)config bool doseedlimit,bskipcow,bskipnali,bskiprabbit,copydoompawns,logcopy; // Cow/Nali ignore?
+var (any)config bool waitforplayers,belogcon;               // Duh
+var (any)config bool dontcopystatic;                        // Avoid  "Decoration" Monsters
+var (any)config bool debugtomotd,messy,showcopy;            // show data number in motd
+var (any)config bool nightnarecopyflagmode,jigga;          // nightmare!  let copied be copied as well.
+//var (any)config bool nightmareregenmode;                 // nightmare!  monster health regenerates.
+
+
+//var (any)config int  spawnmultiplier;                  // How many of each copy of  in each instance in cycle.
+var (any)config bool dontcopybosses;                     // Ignore   "bosses"
+var (any)config int timebase;                            // Ignore   "bosses"
+//var (any)config bool bosseslimit;                      // Only allow this many "bosses" to get copied.
+var (any)config exceptlist exceptionrules[10];           // Map : limit exception to the defualt
+
+// fuck ya , duh just search and compare names and use dlc , that a smarter idea.
+//var (any)config addonlist monsterlist[10];
+
+// var (any)config string simpleaddon [5];             // mabye let it just use one string and split it.?
+//--------------------------------------------------------------------------------------------
+//  replaccment classes
+//--------------------------------------------------------------------------------------------
+//var (replacements)config string bruteclass;                  // subsitute for brute spawns.
+//var (replacements)config string cowlass;                     // subsitute for cow spawns.
+//var (replacements)config string flyclass;                    // subsitute for brute spawns.
+//var (replacements)config string tentacleclass;               // subsitute for brute spawns.
+//var (replacements)config string krallclass;                  // subsitute for krall spawns.
+//var (replacements)config string gasbagclass;                 // subsitute for gasbag spawns.
+//var (replacements)config string mantaclass;                  // subsitute for manta spawns.
+//var (replacements)config string pupaeclass;                  // subsitute for pupae spawns.
+//var (replacements)config string mercenaryclass;              // subsitute for mercenary spawns.
+//var (replacements)config string naliclass;                   // subsitute for nali spawns.
+//var (replacements)config string SkaarjTrooperclass;          // subsitute for SkaarjTrooper spawns.
+//var (replacements)config string SkaarjWarriorclass;          // subsitute for SkaarjWarrior spawns.
+//var (replacements)config string slithclass;                  // subsitute for slith spawns.
+//var (replacements)config string impclass;                    // subsitute for imp spawns.
+//var (replacements)config string titanclass;                  // subsitute for titan spawns.
+//var (replacements)config string spinnerclass;                // subsitute for spinner spawns.
+//var (replacements)config string predatorclass;               // subsitute for predetor spawns.
+var int dist ;
+var int countspawns,countfails,origcnt;
+var string spinclass;
+var string predclass;
+var int tempseed,tempmax;
+var string tempexclusions;
+var int curplay,lastplay; //playercounts
+var class<actor> bbstart;
+var scriptedpawn otherx;
+var vector templocation;
+event BeginPlay()
+{
+      Super.BeginPlay();
+      SetTimer(10.0, true);
+      fixit();  // fix beta map urls
+
+      //bbstart = class<actor>( DynamicLoadObject("btool2.ssgoodspot", class'Class' ) );
+      //pre-seed. // dont pre-seed in jcoopz.
+      //dothings ();
+       log ("-------------------------------------------------------------------------------------------");
+       log ("Simple MosterSpawner/Copyier  Initalizing....   ");
+      // justfixit(); // more fixes
+       foreach AllActors(class'scriptedpawn', otherx) { origcnt++; };
+       log("Pre-Seeded...Added "$countspawns$" Pawns");
+       linkupcopy();
+       traveled++ ;
+
+        // Identify spinner class.  by map name
+           if( instr(Level.Title,"Madehiten - ")!=-1     ){spinclass = "ryspak.spinner";log ("Identified Spinner As "$spinclass); } ;
+           if( instr(Level.Title,"Exploited - ")!=-1     ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Haros - ")!=-1         ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Sirius - ")!=-1        ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Chicken Itza -")!=-1   ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Pharao - ")!=-1        ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Shinigami - ")!=-1     ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Soulstone - ")!=-1     ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Tau'ri -")!=-1         ){spinclass = "ryspak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"THS")!=-1              ){spinclass = "RTNPmapPak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"MP-")!=-1              ){spinclass = "mpupak.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Woody Bog")!=-1        ){spinclass = "spinner.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"T-H's Fun House")!=-1  ){spinclass = "spinner.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Cavern of Cregor")!=-1 ){spinclass = "spinner.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( instr(Level.Title,"Cregor Mt. Pass")!=-1  ){spinclass = "spinner.spinner"; log ("Identified Spinner As "$spinclass);} ;
+           if( Level.Title == "Sealed temple"            ){spinclass = "w3spinner.spinner"; log ("Identified Spinner As "$spinclass);} ;
+
+           if(spinclass =="")
+           {// avoind none someplace i forgot.
+            //log{"Could not identify potental spinner class."};
+            spinclass ="unreali.pupae";
+           }
+           // Idetify predator class.  by map  name
+           if( instr(Level.Title,"THS")!=-1              ){predclass = "RTNPmapPak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"MP-")!=-1              ){predclass = "mpupak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Madehiten - ")!=-1     ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Exploited - ")!=-1     ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Haros - ")!=-1         ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Haros - ")!=-1         ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Sirius - ")!=-1        ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Chicken Itza -")!=-1   ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Pharao - ")!=-1        ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Shinigami - ")!=-1     ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Soulstone - ")!=-1     ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+           if( instr(Level.Title,"Tau'ri -")!=-1         ){predclass = "ryspak.predator"; log ("Identified predator As "$predclass);} ;
+
+           // Arachnopolis
+
+   log("spawn muliplier="$multispawn);
+
+  log ("-------------------------------------------------------------------------------------------");
+}
+
+
+
+
+
+function linkupcopy()
+{
+ local monstercopier unfek;
+ local int countm;
+
+  foreach AllActors(Class'monstercopier', unfek)
+  {
+     countm++;
+
+  }
+   //countm--;
+  log ("Found "$countm $ " Instances already running" );
+  if (countm > 1)
+  {
+  log("double found -bye-bye");
+  destroy();
+  }
+
+}
+
+
+ function fixit()
+{   // fix zmu98 beta map urls
+local teleporter teleptable;
+local int urlat;
+local string frt,lst;
+         foreach AllActors(Class'teleporter', teleptable)
+          {
+              if (  teleptable != None )
+              { // Map Has Teleports...
+               urlat=InStr(teleptable.url,"/");
+               if (urlat== -1) {
+                  }else{
+                   frt=Mid(teleptable.url,0,urlat);
+                   lst=Mid(teleptable.url,urlat+1,len(teleptable.url));
+                   teleptable.url = frt$"#"$lst;
+                  }
+
+              }
+           }
+
+}
+
+
+ function Timer()
+{
+ local scriptedpawn other;
+ local playerpawn otherp;
+ local int coun;
+ local int playa;
+ local int Cunt,hate;
+ local string Shit,Ill;
+
+ cycles++;
+  /*
+  //local string exclusioncache{10}; // stor the seperated delimted string from excusion in here.?
+
+	Shit = GetURLMap();    hate = InStr(Shit,".");     Ill = Mid(Shit,0,Hate);	//log ("this map: "$y);
+	00000
+    For( Cunt = 0; Cunt <  9 ; Cunt++ )
+          {
+           if (exceptionrules[cunt].map !=  "")
+           {
+               if (exceptionrules[cunt].map == Ill)
+               {
+
+                 // found a rule.
+                 log (" exception:   map-"$exceptionrules[cunt].map$ "  / seed-"$exceptionrules[cunt].seed$" / max-"$exceptionrules[cunt].max$" / exc-"$exceptionrules[cunt].exclusions);
+
+
+                 if  (exceptionrules[cunt].seed > 5)
+                 {
+                 tempseed = exceptionrules[cunt].seed;
+                 // mabye Valid
+                 }
+
+                 if  (exceptionrules[cunt].max > 5)
+                 {
+                 tempmax = exceptionrules[cunt].max;
+                  // mabye Valid
+                 }
+
+                 if  (exceptionrules[cunt].max > 5)
+                 {
+                 tempexclusions = exceptionrules[cunt].exclusions;
+                  // mabye Valid
+                 }
+
+               }
+
+
+           }
+
+
+         }
+
+    */
+ //---------------------------------
+   // Count  Monsters
+    foreach AllActors(class'scriptedpawn', other) { coun++; };
+   // Count Players
+    foreach AllActors(class'playerpawn', otherp)  {
+       if (belogcon)
+       {
+
+
+        // check and ignore webadmin under 227f.
+        // if ( otherp.name == "webadmin")
+        // {
+        // }
+
+       }
+      playa++;
+
+
+      };
+      if( int(Level.EngineVersion) > 226 )
+         {//webadmin!
+           playa--;
+         }
+
+   // Handle Seed Goal
+   if (countspawns > seedlimit)
+   {
+   // we are done . we have achived our seed goal.
+   //log ("------------------------------------");
+   log ("Seed goal of "$ seedlimit$" Reached.");
+   //log ("------------------------------------");
+   //destroy();
+
+   }
+
+  // Handle No Host Monsters.
+  if (coun < 5)
+   {
+   log ("Nothing to do , No Monsters ,Aborting");
+   // Todo : Check creature factorieres.
+   destroy();
+   }
+
+  // Handle  Monster Saturation
+  if (countspawns < seedsaturation ) {              // Monster Count Is Below Satatation Point
+    if (waitforplayers && playa > 0) {dothings(); } // Waiting for Players
+    if (!waitforplayers        )     {dothings(); } // Not Waiting.
+   }
+  if (debugtomotd )
+
+  {
+   consolecommand("Set Engine.Engine.GameReplicationInfo MOTDLine2 ( "$"C -" $ coun $ ":"$ origcnt $"/Ts -"$ countspawns $ ":" $countfails$"/Max:- "$seedsaturation$"/SG- "$seedlimit$ "/P- "$ playa$"/t- "$timebase$"/c- "$cycles$"/"$"sm="$multispawn$" )");
+   //consolecommand("Set Engine.Engine.GameReplicationInfo MOTDLine3 travaled  though "$traveled$" maps since last restart )");
+  }else {
+  // consolecommand("Set Engine.Engine.GameReplicationInfo MOTDLine3 Travaled  Though "$traveled$" Maps Since Last Restart )");
+   consolecommand("Set Engine.Engine.GameReplicationInfo MOTDLine2 --IS--");
+   log ( "Current -"$coun $" / Total -"$ countspawns $" /  MaxAtOnce:- "$seedsaturation$"  /  SeedGoal- "$seedlimit$ " / Players- "$ playa $" / timbase- "$timebase,'monstercopier');
+
+  }
+
+
+ if (timebase < 5)
+ { // satefy
+ timebase = 30;
+ }
+setTimer(float(timebase), true);
+}
+
+
+
+
+function dothings ()
+{
+
+ local class<ScriptedPawn> spinnerNewClass;
+ local ScriptedPawn spinneraPawn;
+ local scriptedpawn other;
+ local class<ScriptedPawn> NewClass;
+ local ScriptedPawn aPawn;
+
+ // instr(tempexclusions,"titan")!=-1
+ dist= 100;
+ foreach AllActors(class'scriptedpawn', other)
+ {
+    if (messy)
+    {
+     log(string(other.tag));
+    }
+
+
+       if( Other.isA('brute')                   // Brute!
+       && string(other.tag) != "Copy"
+       //&& countspawns < seedsaturation           // There is space!
+       && instr(tempexclusions,"brute")==-1 )   // Allowed in this map!
+     {
+        // if (tempmax > 5 && tempmax <  )
+
+
+         if (multispawn < 2)
+         {
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 1 && multispawn < 3)
+         {
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  } else{ countfails++;}
+         }
+         if (multispawn > 2 && multispawn < 4)
+         {
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+
+          if (multispawn > 3 && multispawn < 5)
+         {  // much harder
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 4 && multispawn < 6)
+         {  // 5X as  harder
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'brute',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+
+     }
+
+
+       if( Other.isA('cow')
+       && string(other.tag) != "Copy"
+       && !bskipcow
+      // && countspawns < seedsaturation
+       && instr(tempexclusions,"cow")==-1 )
+     {
+       aPawn = Spawn(class'cow',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);  if (apawn !=none)   {   duppy(other,apawn);  }  else{ countfails++;}
+
+
+     }
+
+
+
+
+
+       if( Other.isA('fly')
+       && string(other.tag) != "Copy"
+      // && countspawns < seedsaturation
+       && instr(tempexclusions,"fly")==-1)
+     { // allow sort of  kind of swarms
+
+          aPawn = Spawn(class'fly',,, other.Location + rand(randpsace) * vector(Rotation)  + vect(0.00,0.00,1.00) * 15);
+          if (apawn !=none)  {  duppy(other,apawn); }
+
+          aPawn = Spawn(class'fly',,, other.Location + rand(randpsace) * vector(Rotation)  + vect(0.00,0.00,1.00) * 15);
+          if (apawn !=none)  {  duppy(other,apawn); }
+
+
+
+     }
+
+
+         if( Other.isA('tentacle')
+         && string(other.tag) != "Copy"
+       //  && countspawns < seedsaturation
+         && instr(tempexclusions,"tentacle")==-1  )
+     {
+
+         if ( multispawn < 2)
+         {  // normal
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 1 && multispawn < 3)
+         {   // harder
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 2 && multispawn < 4)
+         {  // even harder
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 3 && multispawn < 5)
+         {  // much harder
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 4 && multispawn < 6)
+         {  // 5X as  harder
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'tentacle',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+
+
+
+
+
+     }
+
+         if( Other.isA('krall')
+         && string(other.tag) != "Copy"
+       //  && countspawns < seedsaturation
+         && instr(tempexclusions,"krall")==-1 )
+     {
+
+
+        if ( multispawn > 0) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 1) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 2) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 3) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 4) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 5) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 6) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 7) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 8) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 9) {  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 10){  aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+
+
+
+
+
+
+      /*
+          if ( multispawn < 2)
+         {
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 1 && multispawn < 3)
+         {
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 2 && multispawn < 4)
+         {
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  } else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  } else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  } else{ countfails++;}
+         }
+          if (multispawn > 3 && multispawn < 5)
+         {  // much harder
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 4 && multispawn < 6)
+         {  // 5X as  harder
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'krall',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+
+
+        */
+
+     }
+
+
+        if( Other.isA('gasbag')
+        && string(other.tag) != "Copy"
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"gasbag")==-1)
+     {
+
+
+          if ( multispawn < 2)
+         {
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 1 && multispawn < 3)
+         {
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 2 && multispawn < 4)
+         {
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+          if (multispawn > 3 && multispawn < 5)
+         {  // much harder
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+         if (multispawn > 4 && multispawn < 6)
+         {  // 5X as  harder
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  } else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+            aPawn = Spawn(class'gasbag',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  }else{ countfails++;}
+         }
+
+
+
+
+     }
+
+
+          if( Other.isA('manta')
+          && string(other.tag) != "Copy"
+         // && countspawns < seedsaturation
+          && instr(tempexclusions,"manta")==-1)
+     {
+
+
+          aPawn = Spawn(class'manta',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15); if (apawn !=none)    {  duppy(other,apawn);  }  else{ countfails++;}
+
+     }
+
+      if( Other.isA('pupae')
+      && string(other.tag) != "Copy"
+     // && countspawns < seedsaturation
+      && instr(tempexclusions,"pupae")==-1)
+     {
+          aPawn = Spawn(class'pupae',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15); if (apawn !=none)   { duppy(other,apawn); } else{ countfails++;}
+
+     }
+
+
+      if( Other.isA('mercenary')
+      && string(other.tag) != "Copy"
+     // && countspawns < seedsaturation
+      && instr(tempexclusions,"mercenary")==-1)
+     {
+
+        if ( multispawn > 0) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 1) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 2) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 3) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 4) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 5) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 6) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 7) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 8) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 9) {  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+        if ( multispawn > 10){  aPawn = Spawn(class'mercenary',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };};
+
+     }
+
+        if( Other.isA('nali')
+        && string(other.tag) != "Copy"
+        && !bskipnali
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"nali")==-1)
+     {
+          aPawn = Spawn(class'nali',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);  if (apawn !=none)  {  duppy(other,apawn);  } else{ countfails++;}
+
+     }
+
+
+       if( Other.isA('SkaarjTrooper')
+       && string(other.tag) != "Copy"
+      // && countspawns < seedsaturation
+       && instr(tempexclusions,"mskaarjtropper")==-1)
+     {
+          aPawn = Spawn(class'SkaarjTrooper',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);  if (apawn !=none)   { duppy(other,apawn); } else{ countfails++;}
+
+     }
+
+
+         if( Other.isA('SkaarjWarrior')
+         && string(other.tag) != "Copy"
+       //  && countspawns < seedsaturation
+         && instr(tempexclusions,"skaarjwarrior")==-1)
+     {
+          aPawn = Spawn(class'SkaarjWarrior',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);  if (apawn !=none)    {  duppy(other,apawn);  }else{ countfails++;}
+
+     }
+
+
+        if( Other.isA('slith')
+        && string(other.tag) != "Copy"
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"slith")==-1)
+     {
+         if ( multispawn > 0) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 1) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 2) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 3) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 4) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 5) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 6) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 7) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 8) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 9) {  aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 10) { aPawn = Spawn(class'slith',,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+
+     }
+
+
+         if( Other.isA('warlord')
+        && string(other.tag) != "Copy"
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"warlord")==-1)
+     {
+
+         if ( multispawn > 0) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 1) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 2) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 3) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 4) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 5) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 6) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 7) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 8) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 9) {  aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 10) { aPawn = Spawn(class'warlord',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+
+
+
+          //aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15); if (apawn !=none)  {  duppy(other,apawn);   }  else{ countfails++;}
+     }
+
+
+
+     if( Other.isA('titan')
+        && string(other.tag) != "Copy"
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"titan")==-1)
+     {
+
+         if ( multispawn > 0) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 1) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 2) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 3) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 4) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 5) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 6) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 7) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 8) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 9) {  aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 10) { aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+
+
+
+          //aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15); if (apawn !=none)  {  duppy(other,apawn);   }  else{ countfails++;}
+     }
+
+
+       if( Other.isA('queen')
+        && string(other.tag) != "Copy"
+       // && countspawns < seedsaturation
+        && instr(tempexclusions,"queen")==-1)
+     {
+
+         if ( multispawn > 0) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 1) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 2) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 3) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 4) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 5) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 6) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 7) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 8) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 9) {  aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+         if ( multispawn > 10) { aPawn = Spawn(class'queen',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (apawn !=none)   {   duppy(other,apawn);  };}else{ countfails++;}
+
+
+
+          //aPawn = Spawn(class'titan',,, other.Location + rand(1000) * vector(Rotation) + vect(0.00,0.00,1.00) * 15); if (apawn !=none)  {  duppy(other,apawn);   }  else{ countfails++;}
+     }
+
+
+
+
+
+
+       if( Other.isA('spinner')
+       && string(other.tag) != "Copy"
+       //&& countspawns < seedsaturation
+       && instr(tempexclusions,"spinner")==-1)
+     {
+         spinnernewClass = class<ScriptedPawn>( DynamicLoadObject(spinclass, class'Class' ) );
+           if ( multispawn < 2)
+         {  // normal
+            spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+         }
+         if (multispawn > 1 && multispawn < 3)
+         {   // harder
+            spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+             spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}else{ countfails++;}
+         }
+         if (multispawn > 2 && multispawn < 4)
+         {  // even harder
+           // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+            // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+            //  spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+          }
+         if (multispawn > 3 && multispawn < 5)
+         {  // much harder
+          // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+           // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+            // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+             // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+         }
+         if (multispawn > 4 && multispawn < 6)
+         {  // 5X as  harder
+            // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+            //  spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+            //   spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+               // spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+               //  spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}
+         }
+
+
+
+
+
+
+
+
+
+
+       //log ("found a aspinner! as  "$spinclass);
+
+
+
+
+
+         // aPawn = Spawn(class'pupae',,, other.Location + rand(400) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+         // if (apawn !=none)
+         // { //log ("spawn brute?");
+         // duppy(other,apawn);
+         // }
+
+     }
+
+      // only for archonopilus
+       if( Other.isA('scorpion')
+       && string(other.tag) != "Copy"
+       //&& countspawns < seedsaturation
+       && instr(tempexclusions,"scorpion.scorpion")==-1)
+     {
+         spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("scorpion.scorpion", class'Class' ) );
+
+         spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+         spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+         spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);}else{ countfails++;}
+
+
+       // log("scorpion.scorpion");
+     }
+
+       if( Other.isA('predator')
+       && string(other.tag) != "Copy"
+       //&& countspawns < seedsaturation
+       )
+     {
+
+     }
+
+
+          if( Other.isA('devilfish')
+          && string(other.tag) != "Copy"
+        //  && countspawns < seedsaturation
+        )
+     {
+       //log("isabrute");
+       //if (string(other.tag) == "copy")
+
+          //Spawn(class'brute',,,other.Location + dist * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+          aPawn = Spawn(class'devilfish',,, other.Location + rand(200) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+          if (apawn !=none)
+          {
+          duppy(other,apawn);
+
+          }
+
+          //Spawn(class'brute',,,other.Location + dist * vector(Rotation) + vect(0.00,0.00,1.00) * 15);
+
+     }
+
+
+      // ---------------------------doompawns support!-------------------------------------------
+      if  (Other.isA('doompawns') && copydoompawns)
+      {
+             if( Other.isA('imp')   && string(other.tag) != "Copy"   //&& countspawns < seedsaturation
+              && instr(tempexclusions,"imp")==-1)
+               {
+                spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.imp", class'Class' ) );
+                spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+                }
+
+
+             if( Other.isA('caco')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"caco")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.caco", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('cyber')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"cyber")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.cyber", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('demon')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"demon")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.demon", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('HeavyTrooper')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"HeavyTrooper")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.HeavyTrooper", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('MediumTrooper')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"MediumTrooper")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.MediumTrooper", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('LightTrooper')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"LightTrooper")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.LightTrooper", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+               if( Other.isA('Marine')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Marine")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Marine", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('WolfSS')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"WolfSS")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.WolfSS", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('Knight')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Knight")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Knight", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+
+              if( Other.isA('Baron')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Baron")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Baron", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('Mancub')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Mancub")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Mancub", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+              if( Other.isA('Skull')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Skull")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Skull", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+
+              if( Other.isA('painHead')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"painHead")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.painHead", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+
+              if( Other.isA('Spider')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Spider")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Spider", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+
+               if( Other.isA('Vile')    && string(other.tag) != "Copy"     //&& countspawns < seedsaturation
+              && instr(tempexclusions,"Vile")==-1)
+              {
+               spinnernewClass = class<ScriptedPawn>( DynamicLoadObject("doompawns.Vile", class'Class' ) );
+               spinneraPawn = Spawn(spinnernewClass,,, other.Location + rand(randpsace) * vector(Rotation) + vect(0.00,0.00,1.00) * 15);   if (spinnerapawn !=none){  duppy(other,spinnerapawn);} else{ countfails++;}
+
+              }
+
+
+      }
+
+
+
+
+
+
+
+ }
+
+
+ if (nightnarecopyflagmode)
+ {  //COPY ALL  NIGHTMARE!
+   consolecommand("set scriptedpawn tag ahfuck");
+
+ }
+
+}
+
+
+
+
+     function  duppy(scriptedpawn p,scriptedpawn duppyp)
+    {     // copy info from  p to duppyp
+     duppyp.tag = 'copy';       // avoid the looping crap hole of doom
+
+
+
+      if (logcopy)
+     {
+      log("spawned " $ string(p.Class));
+     }
+
+     if (showcopy)
+     {
+      duppyp.menuname=string(p.Class);
+     }
+     duppyp.Health=p.health ;
+     duppyp.DropWhenKilled=p.DropWhenKilled;
+     duppyp.rangedprojectile=p.rangedprojectile;
+
+     // Lighting
+     duppyp.lightbrightness=p.lightbrightness;
+     duppyp.lighthue=p.lighthue;
+     duppyp.lightsaturation=p.lightsaturation;
+     duppyp.lightcone=p.lightcone;
+     duppyp.lighteffect=p.lighteffect;
+     duppyp.lightperiod=p.lightperiod;
+     duppyp.lightphase=p.lightphase;
+     duppyp.lightradius=p.lightradius;
+     duppyp.lighttype=p.lighttype;
+
+     // Scaling
+     duppyp.drawscale=p.drawscale;
+
+     // Skins
+     duppyp.Style=p.Style;
+     duppyp.Skin=p.Skin;
+     duppyp.MultiSkins[0]=p.MultiSkins[0];
+     duppyp.MultiSkins[1]=p.MultiSkins[1];
+     duppyp.MultiSkins[2]=p.MultiSkins[2];
+     duppyp.MultiSkins[3]=p.MultiSkins[3];
+     duppyp.MultiSkins[4]=p.MultiSkins[4];
+     duppyp.MultiSkins[5]=p.MultiSkins[5];
+     duppyp.MultiSkins[6]=p.MultiSkins[6];
+     duppyp.MultiSkins[7]=p.MultiSkins[7];
+     countspawns++;
+      if (jigga)
+      {
+     duppyp.lifespan=100; // 1 min . attempt to creat hell
+
+      }
+          duppyp.GotoState('Attacking');
+
+          if (dontcopybosses &&  duppyp.bIsBoss)
+          {
+           duppyp.destroy();
+           log("Destoyed  Invalid boss copy.");
+           countspawns--;
+          }
+
+
+
+          if (dontcopystatic &&  duppyp.bstatic)
+          {
+           p.destroy();
+           log("Destoyed  Invalid static copy.");
+           countspawns--;
+          }
+    }
+
+
+
+  function  lookupm()
+  {
+   local int Cunt;
+   local string Shit,Ill;
+   local int hate,torn;
+   //local string exclusioncache{10}; // stor the seperated delimted string from excusion in here.
+
+	Shit = GetURLMap();
+	Hate = InStr(Shit,".");
+	Ill = Mid(Shit,0,Hate);
+	Torn = 0;
+
+	//log ("this map: "$y);
+	//log(s);
+
+    For( Cunt = 0; Cunt <  9 ; Cunt++ )
+          {
+           if (exceptionrules[cunt].map !=  "")
+           {
+               if (exceptionrules[cunt].map == Ill)
+               {
+
+                 // found a rule.
+                 log (" a exception rule for this map was found!  map-"$exceptionrules[cunt].map$ "  / seed-"$exceptionrules[cunt].seed$" / max-"$exceptionrules[cunt].max$" / exc-"$exceptionrules[cunt].exclusions);
+
+
+                 if  (exceptionrules[cunt].seed > 5)
+                 {
+               // mabye Valid
+                 }
+
+                 if  (exceptionrules[cunt].max > 5)
+                 {
+                  // mabye Valid
+                 }
+
+
+
+               }
+
+
+           }
+
+
+         }
+
+  }
+
+
+     // scorpion
+
